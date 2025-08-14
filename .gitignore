@@ -29,3 +29,4 @@ Thumbs.db
 # Optional: exclude large model files if not needed
 model/*.pkl
 model/*.bin
+openai_prompt_generation.ipynb
