@@ -1,0 +1,31 @@
+# Python envs
+.venv/
+venv/
+env/
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Data and artifacts
+uploads/
+base_data/
+test_model/
+*.xlsx
+*.xls
+*.csv
+
+# Database files
+docker/postgres/data/
+
+# IDE / Editor / OS files
+.vscode/
+.vs/
+.DS_Store
+Thumbs.db
+
+# Optional: exclude large model files if not needed
+model/*.pkl
+model/*.bin
