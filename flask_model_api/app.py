@@ -13,7 +13,8 @@ from werkzeug.utils import secure_filename
 import pandas as pd
 import numpy as np
 from generate import generate_prompt_from_persona
-import requests   
+import requests 
+from pathlib import Path  
 
 """
 ==========================
@@ -45,7 +46,8 @@ CORS(app)  # This allows all origins
 print(app.url_map)
 
 # Load .env from this folder
-load_dotenv()
+dotenv_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=dotenv_path, override=True)
 
 # Get API key (fail-safe)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
