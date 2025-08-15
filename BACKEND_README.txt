@@ -1,136 +1,171 @@
-# Backend README
+AI CONTENT PORTAL BACKEND - README
 
-A Flask API that powers clustering-based persona matching and personalized content generation. The backend serves two workflows:
-1) Upload an Excel file for clustering, persona retrieval, and content generation.
-2) Generate promotional content directly from campaign inputs without a file upload.
+1. PURPOSE
+This repository contains a Python Flask API for clustering based persona matching and AI content generation. It serves two workflows that the Angular frontend calls.
 
-The backend also supports scheduled retraining every quarter at 02:00 to keep clusters and personas fresh.
+Workflow 1  Smart Form
+- Frontend sends campaign inputs as JSON
+- Backend generates text and optional image prompt
+- Endpoint  POST /generate-post or POST /generate-promo
 
----
+Workflow 2  Upload Dataset
+- Frontend uploads an Excel file
+- Backend validates, clusters, retrieves personas, and generates content by segment
+- Endpoint  POST /upload-excel
 
-## 1. Tech Stack
+
+2. TECH STACK AND DEPENDENCIES
 - Python 3.10 or newer
-- Flask
+- Flask and Flask CORS
+- Pandas and NumPy
 - scikit-learn, UMAP, HDBSCAN
-- Pandas, NumPy, GeoPandas where applicable
 - OpenAI Python SDK
-- APScheduler or schedule for timed retraining
-- gunicorn or waitress for production
+- Joblib or pickle for model files
+- Optional APScheduler or schedule for retraining
+- gunicorn or waitress for production serving
 
----
+For the complete list of Python packages and exact versions, refer to requirements.txt in the repository root.
 
-## 2. Project Structure
-```
-backend/
-  app.py                 # Flask entrypoint and routes
-  generate.py            # Core logic for embeddings, clustering, persona lookups, and prompt assembly
-  personas/
-    cluster_personas.pkl # Persona dictionary keyed by cluster id
-  models/
-    umap.pkl
-    hdbscan.pkl
-    encoder.pkl
-    scaler.pkl
-  uploads/               # Incoming Excel files
-  base_data/YYYY-MM-DD/  # Historical training snapshots for retraining
-  requirements.txt
-  README.md
-```
-You can rename or relocate folders. If you do, update the environment variables below.
+Install them with:
+pip install -r requirements.txt
 
----
 
-## 3. Environment Variables
-Create a `.env` file in `backend/` or set these in your host environment:
-```
+3. REPOSITORY LAYOUT
+This reflects your current structure. Names may vary slightly by branch.
+
+backend root
+  .venv/                       local virtual environment
+  flask_model_api/             optional subfolder if used in your project
+  __pycache__/                 Python bytecode cache
+  production_models/          trained artifacts and cluster outputs thats being used
+  base_data/                   historical training snapshots for retraining
+    YYYY-MM-DD folders         store raw or cleaned inputs used for retraining
+
+  model/                       trained artifacts and cluster outputs
+    Model_attempts/            notebooks and experiment artifacts(refer to 14 for final ml, 15 for model comparison)
+    cluster_profiles.csv       final cluster profile table
+    cluster_profiles_*.csv     other versions
+    cluster_personas.pkl       dict of personas keyed by cluster id
+    umap.pkl                   dimensionality reducer
+    hdbscan.pkl                clustering model
+    encoder.pkl                categorical encoder if used
+    scaler.pkl                 feature scaler if used
+
+  test_model/                  optional test artifacts
+  uploads/                     runtime uploads from the frontend
+
+  .env                         environment variables
+  app.py                       main Flask entrypoint
+  app_v1.py                    older version of the app
+  app_v2.py                    older version of the app
+  generate.py                  core logic used by app.py
+  generate_v1.py               previous version
+  generate_v2.py               previous version
+  schemas.py                   pydantic models and validation
+  test_api.py                  simple smoke tests
+
+  requirements.txt             Python dependencies
+  BACKEND_README.txt           this file
+
+
+4. ENVIRONMENT VARIABLES
+Create a .env file in the backend root. Example values below.
+
 FLASK_ENV=development
 FLASK_DEBUG=1
 PORT=5000
 
-# External services
-OPENAI_API_KEY=sk-...
+# OpenAI
+OPENAI_API_KEY=sk-your-key
 
 # Paths
-MODEL_DIR=./models
-PERSONA_PATH=./personas/cluster_personas.pkl
+MODEL_DIR=./model
+PERSONA_PATH=./model/cluster_personas.pkl
 UPLOAD_DIR=./uploads
 BASE_DATA_DIR=./base_data
 
 # CORS
 ALLOW_ORIGINS=http://localhost:4200,http://127.0.0.1:4200
-```
 
----
 
-## 4. Installation
-```bash
-cd backend
+5. SETUP
+Step 1  create and activate a virtual environment
+Windows:
 python -m venv .venv
-# Windows
 .venv\Scripts\activate
-# macOS/Linux
+
+macOS or Linux:
+python3 -m venv .venv
 source .venv/bin/activate
 
+Step 2  install dependencies
 pip install -r requirements.txt
-```
 
-If you do not have `requirements.txt` yet, export one:
-```bash
-pip freeze > requirements.txt
-```
+Step 3  create folders if they do not exist
+mkdir uploads
+mkdir model
+mkdir base_data
 
----
+Step 4  place trained artifacts in model
+Required at minimum:
+- cluster_personas.pkl
+- umap.pkl
+- hdbscan.pkl
+Add encoder.pkl and scaler.pkl if your pipeline expects them
 
-## 5. Running the Server
-### Development
-```bash
-# With Flask's built-in server
+
+6. RUNNING
+Development:
 python app.py
 
-# or with Flask CLI
-export FLASK_APP=app.py
+Flask CLI alternative:
+set FLASK_APP=app.py    (Windows PowerShell: $env:FLASK_APP="app.py")
 flask run --port 5000
-```
 
-### Production
-```bash
-# gunicorn example
+Production with gunicorn:
+pip install gunicorn
 gunicorn -w 2 -b 0.0.0.0:5000 app:app
-```
 
----
 
-## 6. Key Routes
+7. API ENDPOINTS
 
-### POST /upload-excel
-Uploads an Excel file, applies the preprocessing and clustering pipeline, retrieves the matching persona, and returns generated content.
-- Content-Type: multipart/form-data
-- Field: file must be .xlsx or .xls (update validation if you want CSV)
+POST /upload-excel
+Use for Workflow 2. Accepts an Excel file and returns clusters, personas, and generated content.
+Content-Type: multipart/form-data
+Field name: file
+Accepted: xlsx or xls
 
-Expected columns depend on your trained pipeline. Example:
+Expected columns depend on your pipeline. Common examples:
 - date
 - location
 - loyalty_tier
-- Additional campaign fields if required
+- other campaign fields as defined in schemas.py
 
-Response
-```json
+Example curl:
+curl -X POST http://localhost:5000/upload-excel ^
+  -H "Accept: application/json" ^
+  -F "file=@uploads/sample_customer_data.xlsx"
+
+Typical response:
 {
   "status": "ok",
-  "cluster_id": 3,
-  "persona": { "...": "..." },
-  "content": {
-    "text": "Generated caption ...",
-    "image_prompt": "..."
-  }
+  "segments": [
+    {
+      "cluster_id": 3,
+      "persona": { "...": "..." },
+      "content": {
+        "text": "Generated caption",
+        "image_prompt": "..."
+      }
+    }
+  ]
 }
-```
 
-### POST /generate-promo
-Generates promotional content directly from campaign inputs. No file upload required.
-- Body: application/json
-- Example body:
-```json
+POST /generate-post
+Use for Workflow 1. Generates content from campaign inputs without a file.
+Content-Type: application/json
+
+Example body:
 {
   "objective": "Drive app installs",
   "industry": "Retail",
@@ -138,77 +173,133 @@ Generates promotional content directly from campaign inputs. No file upload requ
   "past_engagement": "Low",
   "prefer_output": "text"
 }
-```
 
-### POST /generate-post
-Variant of generate-promo used by the prompt page workflow. Expects similar JSON and returns text, image prompt, or both.
+POST /generate-promo
+Alternate route used by the prompt flow. Same idea as generate-post. Your code may route both to a common handler in generate.py.
 
----
 
-## 7. Core Logic Summary
-generate.py contains reusable functions to:
-1. Validate and encode campaign features.
-2. Transform features using the fitted encoder and scaler.
-3. Project into the reduced space using UMAP.
-4. Assign or query cluster labels with HDBSCAN.
-5. Retrieve the persona for that cluster from cluster_personas.pkl.
-6. Build a high quality prompt that merges persona traits and campaign inputs.
-7. Call the OpenAI API to produce text, image prompt, or both.
+8. CORE LOGIC OVERVIEW
+The generate module performs:
+1. Validate and encode inputs using schemas.py
+2. Transform features with encoder and scaler if configured
+3. Reduce dimensionality with UMAP
+4. Assign or query cluster labels with HDBSCAN
+5. Map cluster id to persona from cluster_personas.pkl
+6. Assemble a prompt that merges persona traits and inputs
+7. Call the OpenAI API to produce text, image prompt, or both
+8. Return a clean JSON response for the frontend
 
-This design lets the API serve real time results with consistent persona alignment.
 
----
+9. RETRAINING
+Goal: keep clusters and personas fresh using data stored in base_data.
 
-## 8. Scheduled Retraining
-We retrain every quarter at 02:00 Singapore time to avoid peak usage.
 Options:
-- Use APScheduler inside Flask.
-- Or run a separate cron or systemd timer that calls a retrain script.
+- Run APScheduler inside the Flask app
+- Run a separate cron or systemd timer that calls a retraining script
 
-Pseudocode with APScheduler:
-```python
-from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import datetime
-import pytz
+Recommended steps inside your retrain script:
+1. Collect all CSV or Excel from base_data
+2. Fit encoders and scalers
+3. Fit UMAP and HDBSCAN
+4. Regenerate personas and cluster profile tables
+5. Write new artifacts to a temporary folder
+6. Atomically replace files in model after validation
+7. Log a short report for audit
 
-tz = pytz.timezone("Asia/Singapore")
-scheduler = BackgroundScheduler(timezone=tz)
+Keep retraining code under retraining_script or a similar folder. Document choices in comments.
 
-def retrain_job():
-    # 1) Aggregate all uploads in base_data/
-    # 2) Refit encoder, scaler, UMAP, HDBSCAN
-    # 3) Regenerate cluster_personas.pkl
-    # 4) Replace models atomically
-    pass
 
-# Run daily at 02:00 and check if it is first day of quarter
-scheduler.add_job(retrain_job, 'cron', hour=2, minute=0)
-scheduler.start()
-```
+10. TESTING
+- Unit tests for functions in generate.py
+- Integration tests for endpoints using Flask test client
+- Sample files in a tests or data folder
+- A quick smoke test can be run with test_api.py
 
-Document your chosen approach in code comments.
 
----
+11. DEPLOYMENT NOTES
+- Set FLASK_ENV=production and FLASK_DEBUG=0
+- Serve behind Nginx or a managed load balancer
+- Restrict ALLOW_ORIGINS to the real frontend domain
+- Do not commit .env or model artifacts to public repos
+- Ensure uploads and base_data are writable by the service account
+- Add startup warming to load models on first request
 
-## 9. Testing
-- Unit tests for generate.py functions.
-- Integration tests for endpoints with Flask's test client.
-- Use small sample Excel files under tests/data/.
 
----
+12. TROUBLESHOOTING
+400 or 415 on upload:
+- Check multipart form field name "file"
+- Ensure xlsx or xls and correct Content-Type
 
-## 10. Deployment Notes
-- Set FLASK_ENV=production and disable debug.
-- Serve behind Nginx or a cloud load balancer.
-- Restrict ALLOW_ORIGINS to your frontend domain.
-- Store API keys in a secrets manager when possible.
-- Ensure the uploads/ and base_data/ directories are writable.
+CORS blocked:
+- Verify Flask CORS configuration and ALLOW_ORIGINS list
 
----
+Model mismatch errors:
+Pickle model errors or mismatches
+- Symptom: server crashes on startup when loading .pkl files. Example:
+  TypeError: code() argument 13 must be str, not int
+- Cause: the .pkl was created with a different Python or numba stack.
+- Fix: rebuild the models in your current environment, then copy the artifacts into the folders below so they contain all 5 files.
 
-## 11. Troubleshooting
-- 415 or 400 on upload: verify Content-Type and file extension checks.
-- CORS blocked: confirm ALLOW_ORIGINS and that Flask-CORS is configured.
-- Model mismatch: ensure .pkl files match the code version that expects them.
-- OpenAI errors: verify OPENAI_API_KEY and request payload.
-- Slow first request: warm up models on startup to prime caches.
+Rebuild using the project notebook
+1) Open 14_ml_final.ipynb
+2) Run all cells to refit UMAP and HDBSCAN and regenerate personas
+3) The notebook writes artifacts to your source folder, for example:
+   C:\Users\Lenovo\Downloads\Year 3 Major project\ML models\Model_attempts\model
+   Files you should have there:
+   • cluster_personas.pkl
+   • encoder.pkl
+   • scaler.pkl
+   • umap_model.pkl
+   • hdbscan_model.pkl  (your file name may look like HDBSCAN_cluster_*.pkl, that is fine)
+
+Copy into the folders your app reads
+Folder A  model\
+C:\Users\Lenovo\Downloads\Year 3 Major project\ML models\model
+Must contain these 5 files:
+• cluster_personas.pkl
+• encoder.pkl
+• scaler.pkl
+• umap_model.pkl
+• hdbscan_model.pkl   (or your HDBSCAN_cluster_*.pkl)
+
+Folder B  production_models\
+C:\Users\Lenovo\Downloads\Year 3 Major project\ML models\flask_model_api\retraining_scripts\production_models
+Must contain these 2 files:
+• umap_model.pkl
+• hdbscan_model.pkl   (use the same HDBSCAN file, you can rename it to hdbscan_model.pkl)
+
+Note
+Do not put model pickles in uploads\
+
+Verify, then restart
+dir "C:\Users\Lenovo\Downloads\Year 3 Major project\ML models\model\*.pkl"
+dir "C:\Users\Lenovo\Downloads\Year 3 Major project\ML models\flask_model_api\retraining_scripts\production_models\*.pkl"
+taskkill /f /im python.exe  >nul 2>&1
+python app.py
+
+If the error persists
+• You are still loading an old path. Search your code for joblib.load and confirm the filenames.
+• Ensure the venv used to run app.py is the same one you used to rebuild the models.
+
+OpenAI errors:
+- Verify OPENAI_API_KEY
+- Print the prompt payload in debug to see if fields are missing
+
+Slow first request:
+- Warm models on startup by calling a dry run function in app.py
+
+Windows script execution denied:
+- Run PowerShell as Administrator and set execution policy for the session:
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+
+13. SAMPLE .ENV FOR LOCAL DEV
+FLASK_ENV=development
+FLASK_DEBUG=1
+PORT=5000
+OPENAI_API_KEY=sk-your-key
+MODEL_DIR=./model
+PERSONA_PATH=./model/cluster_personas.pkl
+UPLOAD_DIR=./uploads
+BASE_DATA_DIR=./base_data
+ALLOW_ORIGINS=http://localhost:4200
